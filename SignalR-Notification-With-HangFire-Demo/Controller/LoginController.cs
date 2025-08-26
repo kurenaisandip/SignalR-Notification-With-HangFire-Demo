@@ -1,9 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using SignalR_Notification_With_HangFire_Demo.EF;
-using SignalR_Notification_With_HangFire_Demo.EF.Entity;
+using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -25,46 +24,61 @@ public class LoginController: ControllerBase
 
     public class LoginRequestDto
     {
-        public string Username { get; set; }
-        public string Password { get; set; }
+        [Required]
+        public string Username { get; set; } = default!;
+        [Required]
+        public string Password { get; set; } = default!;
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
-        var user = await _context.Logins.FirstOrDefaultAsync(x => x.Username == request.Username && x.IsActive == true);
-        if (user == null || user.PasswordHash != request.Password) // NOTE: Replace with proper password hash check in production
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var user = await _context.Logins.FirstOrDefaultAsync(x => x.Username == request.Username && x.IsActive);
+        if (user == null || user.PasswordHash != request.Password) // TODO: Replace with proper password hash check
         {
             return Unauthorized("Invalid credentials or inactive user.");
         }
 
+        // Build claims (role added as both ClaimTypes.Role and 'role' for policies)
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.Name, user.Username),
             new Claim(ClaimTypes.Role, user.Role),
-            new Claim("role", user.Role), // For policy-based auth
+            new Claim("role", user.Role),
             new Claim("loginId", user.LoginID.ToString())
         };
 
-        var jwtSettings = _configuration.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]));
+        var jwtSection = _configuration.GetSection("Jwt");
+        var keyStr = jwtSection.GetValue<string>("Key");
+        var issuer = jwtSection.GetValue<string>("Issuer");
+        var audience = jwtSection.GetValue<string>("Audience");
+        var expireMinutes = jwtSection.GetValue<int?>("ExpireMinutes") ?? 60;
+
+        if (string.IsNullOrWhiteSpace(keyStr) || string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience))
+        {
+            return StatusCode(500, "JWT configuration is missing. Please check appsettings.json.");
+        }
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyStr));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var expires = DateTime.UtcNow.AddMinutes(Convert.ToDouble(jwtSettings["ExpireMinutes"]));
+        var expires = DateTime.UtcNow.AddMinutes(expireMinutes);
 
-        // Wrap claims in ClaimsIdentity and ClaimsPrincipal (for demonstration)
-        var identity = new ClaimsIdentity(claims, "Token");
-        var principal = new ClaimsPrincipal(identity);
-        // You can use 'principal' for manual authentication context if needed
-
+        // Pass the claims directly to the token
         var token = new JwtSecurityToken(
-            issuer: jwtSettings["Issuer"],
-            audience: jwtSettings["Audience"],
-            claims: identity.Claims, // Use claims from ClaimsIdentity
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
             expires: expires,
             signingCredentials: creds
         );
 
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+        // Optionally update last login
+        user.LastLogin = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
 
         return Ok(new {
             token = tokenString,
