@@ -1,0 +1,6 @@
+@SignalR_Notification_With_HangFire_Demo_HostAddress = http://localhost:5078
+
+GET {{SignalR_Notification_With_HangFire_Demo_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

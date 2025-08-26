@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "ssBYY8QiPyyTix5f8ahFHaP/tqPUsY7K+yaIaaZHDFM=",
+  "Source": "SignalR-Notification-With-HangFire-Demo",
+  "BasePath": "_content/SignalR-Notification-With-HangFire-Demo",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
