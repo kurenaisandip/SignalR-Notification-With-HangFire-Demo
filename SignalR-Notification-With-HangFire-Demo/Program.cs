@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore;
 using SignalR_Notification_With_HangFire_Demo;
+using SignalR_Notification_With_HangFire_Demo.EF;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +10,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("ConnectionStrings"));
+
+builder.Services.AddDbContext<AppDbContext>(options => 
+    options.UseSqlServer(AppSettings.ConnectionString));
 
 builder.Services.AddControllers();
 
