@@ -5,6 +5,10 @@ using Microsoft.IdentityModel.Tokens;
 using SignalR_Notification_With_HangFire_Demo;
 using SignalR_Notification_With_HangFire_Demo.EF;
 using System.Text;
+using Hangfire;
+using Hangfire.SqlServer;
+using Microsoft.AspNetCore.SignalR;
+using SignalR_Notification_With_HangFire_Demo.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +23,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddControllers();
+builder.Services.AddTransient<SignalR_Notification_With_HangFire_Demo.Services.AssignmentJobRunner>();
 
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var keyStr = jwtSettings.GetValue<string>("Key");
@@ -46,12 +51,41 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(key),
         RoleClaimType = ClaimTypes.Role
     };
+    // Allow SignalR to authenticate via access_token query string
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/notification"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("TeacherPolicy", policy => policy.RequireClaim("role", "Teacher"));
     options.AddPolicy("StudentPolicy", policy => policy.RequireClaim("role", "Student"));
+});
+
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
+
+var hangfireCs = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddHangfire(config =>
+{
+    config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+          .UseSimpleAssemblyNameTypeSerializer()
+          .UseRecommendedSerializerSettings()
+          .UseSqlServerStorage(hangfireCs, new SqlServerStorageOptions
+          {
+              PrepareSchemaIfNecessary = true
+          });
 });
 
 var app = builder.Build();
@@ -67,6 +101,11 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Start Hangfire Server and expose Dashboard
+app.UseHangfireDashboard("/hangfire");
+app.UseHangfireServer();
+
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notification");
 
 app.Run();

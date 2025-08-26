@@ -8,8 +8,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Hangfire" Version="1.8.21" />
         <PackageReference Include="Hangfire.Core" Version="1.8.21" />
         <PackageReference Include="Hangfire.SqlServer" Version="1.8.21" />
+        <PackageReference Include="Hangfire.AspNetCore" Version="1.8.21" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.19" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.14"/>
         <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="8.0.19" />
@@ -24,8 +26,6 @@
 
     <ItemGroup>
       <Folder Include="BackgroungJob\" />
-      <Folder Include="Hubs\" />
-      <Folder Include="Services\" />
     </ItemGroup>
 
 </Project>
