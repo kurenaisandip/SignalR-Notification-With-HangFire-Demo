@@ -1,11 +1,7 @@
-﻿using Hangfire;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
-using SignalR_Notification_With_HangFire_Demo.Hubs;
 using SignalR_Notification_With_HangFire_Demo.Services;
 using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
 
 namespace SignalR_Notification_With_HangFire_Demo.Controller;
 
@@ -14,13 +10,11 @@ namespace SignalR_Notification_With_HangFire_Demo.Controller;
 [Authorize(Roles = "Teacher")]
 public class TeacherController: ControllerBase
 {
-    private readonly IBackgroundJobClient _backgroundJobs;
-    private readonly IHubContext<NotificationHub> _hub;
+    private readonly AssignmentService _assignmentService;
 
-    public TeacherController(IBackgroundJobClient backgroundJobs, IHubContext<NotificationHub> hub)
+    public TeacherController(AssignmentService assignmentService)
     {
-        _backgroundJobs = backgroundJobs;
-        _hub = hub;
+        _assignmentService = assignmentService;
     }
 
     public class PostAssignmentRequest
@@ -41,31 +35,20 @@ public class TeacherController: ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var teacherLoginId = User.FindFirst("loginId")?.Value;
-        if (string.IsNullOrWhiteSpace(teacherLoginId))
+        var teacherLoginIdStr = User.FindFirst("loginId")?.Value;
+        if (!int.TryParse(teacherLoginIdStr, out var teacherLoginId))
         {
-            return Unauthorized("Missing loginId claim.");
+            return Unauthorized("Missing or invalid loginId claim.");
         }
 
-        var payload = new AssignmentJobPayload
-        {
-            TeacherLoginId = int.Parse(teacherLoginId),
-            ClassID = request.ClassID,
-            SubjectID = request.SubjectID,
-            Title = request.Title,
-            Description = request.Description,
-            DueDateUtc = request.DueDate.ToUniversalTime()
-        };
-
-        // Enqueue background job
-        _backgroundJobs.Enqueue<AssignmentJobRunner>(runner => runner.ProcessAssignmentAsync(payload));
-
-        // Notify teacher immediately that the job is queued
-        await _hub.Clients.User(teacherLoginId).SendAsync("AssignmentQueued", new {
-            message = "Assignment queued for processing.",
-            title = request.Title,
-            dueDate = request.DueDate
-        });
+        await _assignmentService.QueueAssignmentAsync(
+            teacherLoginId,
+            request.ClassID,
+            request.SubjectID,
+            request.Title,
+            request.Description,
+            request.DueDate.ToUniversalTime(),
+            HttpContext.RequestAborted);
 
         return Accepted(new { message = "Assignment queued for processing." });
     }

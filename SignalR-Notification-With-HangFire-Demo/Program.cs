@@ -9,13 +9,40 @@ using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.SignalR;
 using SignalR_Notification_With_HangFire_Demo.Hubs;
+using SignalR_Notification_With_HangFire_Demo.Services;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "SignalR Notification API", Version = "v1" });
+
+    var jwtSecurityScheme = new OpenApiSecurityScheme
+    {
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Description = "Enter 'Bearer {your JWT}'",
+        Reference = new OpenApiReference
+        {
+            Id = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
+            Type = ReferenceType.SecurityScheme
+        }
+    };
+
+    options.AddSecurityDefinition(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme, jwtSecurityScheme);
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        { jwtSecurityScheme, Array.Empty<string>() }
+    });
+});
 
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("DefaultConnection"));
 
@@ -24,6 +51,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddTransient<SignalR_Notification_With_HangFire_Demo.Services.AssignmentJobRunner>();
+builder.Services.AddScoped<AssignmentService>();
 
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var keyStr = jwtSettings.GetValue<string>("Key");
@@ -105,7 +133,6 @@ app.UseAuthorization();
 
 // Start Hangfire Server and expose Dashboard
 app.UseHangfireDashboard("/hangfire");
-app.UseHangfireServer();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notification");

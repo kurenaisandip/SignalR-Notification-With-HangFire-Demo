@@ -27,6 +27,7 @@
 
     <ItemGroup>
       <Folder Include="BackgroungJob\" />
+      <Folder Include="DTOS\" />
     </ItemGroup>
 
 </Project>
